@@ -1,17 +1,21 @@
 # GivEnergy BMS Analysis
 
-Documentation and analysis of the GivEnergy Gen 2 LV battery BMS protocol, with the aim of enabling third-party inverter compatibility, BMS health monitoring, and emulator implementations that let cheaper battery packs work with GivEnergy inverters.
+Documentation and analysis of the GivEnergy Gen 2 LV battery BMS protocol. With GivEnergy in administration as of 2026, the goal is to keep installed kit useful by opening up the protocol enough for two complementary integrations:
+
+1. **Third-party LFP battery + GivEnergy inverter** - an emulator pretends to be a GivEnergy BMS so a cheaper LFP pack can be used in place of an out-of-warranty / unobtainable original. See [docs/07-emulator-implications.md](docs/07-emulator-implications.md).
+
+2. **GivEnergy battery + third-party inverter** - a bridge reads the GivEnergy battery and re-presents it on a standard protocol (Pylontech CAN being the prime target, supported by Victron, Deye, Goodwe, Sungrow, Sofar and many others). See [docs/08-bridge-implementation.md](docs/08-bridge-implementation.md).
+
+Plus the obvious side-benefit: BMS health monitoring and diagnostics directly from the battery, without going through GivEnergy's cloud.
 
 ## Background
 
-The original empirical analysis - hardware setup, RS485 captures, raw hex traces, and field-by-field interpretations - was started by @kenbell in [NOTES.md](NOTES.md). Now that GivEnergy support is no longer available, the goal is to make the protocol open enough that third-party batteries can be used with GivEnergy inverters and/or that GivEnergy batteries can be used with non-GivEnergy inverters.
-
-This documentation expands on Ken's empirical work with:
+The original empirical analysis - hardware setup, RS485 captures, raw hex traces, and field-by-field interpretations - was started by @kenbell in [NOTES.md](NOTES.md). This documentation expands on that empirical work with:
 
 - Static analysis of the official BMS firmware (multiple versions: 3017, 3020, 3022)
 - Static analysis of multiple inverter firmware variants (FA-series, A316/HY, A920/AIO, etc.)
 - Wire-capture parsing and timing analysis
-- Implementation guidance for emulators
+- Implementation guidance for both emulator (Goal 1) and bridge (Goal 2) directions
 
 ## Documentation index
 
@@ -24,7 +28,8 @@ This documentation expands on Ken's empirical work with:
 | [docs/04-bms-firmware.md](docs/04-bms-firmware.md) | BMS firmware static analysis - MCU, register table, FC handlers, internal architecture |
 | [docs/05-inverter-firmware.md](docs/05-inverter-firmware.md) | Inverter firmware analysis - variants, validation rules, "BMS protocol is the constant" insight |
 | [docs/06-wire-captures.md](docs/06-wire-captures.md) | Cadence, latency, IR rotation pattern, capture methodology |
-| [docs/07-emulator-implications.md](docs/07-emulator-implications.md) | Design rules and pitfalls for an emulator implementation |
+| [docs/07-emulator-implications.md](docs/07-emulator-implications.md) | **Goal 1** - Emulator implementation (3rd-party battery -> GivEnergy inverter) |
+| [docs/08-bridge-implementation.md](docs/08-bridge-implementation.md) | **Goal 2** - Bridge implementation (GivEnergy battery -> 3rd-party inverter) |
 
 ## Tools
 
@@ -66,5 +71,7 @@ Contributions welcome. Common useful contributions:
 - More wire captures, especially under specific conditions (charge / discharge / fault / balancing)
 - Captures from different inverter variants
 - Additional firmware versions
-- Emulator implementations and test reports
+- Emulator (Goal 1) implementations and test reports against real GivEnergy inverters
+- Bridge (Goal 2) implementations - especially Pylontech-CAN bridges tested against Victron / Deye / etc.
 - Corrections to field interpretations
+- Cell-monitor protocol details (currently incompletely documented)

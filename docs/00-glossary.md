@@ -8,6 +8,10 @@ A reference for terms used throughout this documentation. Aimed at readers who a
 
 **RS485**: A robust, differential, multidrop electrical bus standard for serial data. Allows multiple devices on the same pair of wires, with longer cable runs than RS232 (up to ~1.2 km). The GivEnergy BMS link uses RS485.
 
+**CAN bus**: Another differential serial bus (originally automotive). Faster than RS485 typically (250 kbps - 1 Mbps), uses 11-bit or 29-bit message IDs, supports broadcast messaging. Used by most third-party inverters for battery comms (Pylontech CAN, BYD CAN, Victron VE.Can).
+
+**SocketCAN**: Linux's standard CAN driver framework. Lets userspace programs send/receive CAN frames as if they were sockets. Tools like `candump`, `cansend`, and Python's `python-can` library use it.
+
 **Multidrop**: A bus topology where multiple devices share one cable. Only one device transmits at a time; others listen. RS485 supports up to 32 standard-load devices on a bus.
 
 **Half-duplex**: Devices can transmit OR receive but not both at the same time. RS485 is half-duplex.
@@ -122,9 +126,21 @@ The GivEnergy BMS only implements **FC=3, FC=4, and FC=6**. Other FCs return a M
 
 **Wire capture / trace**: A recording of the bytes flowing on a communications bus. Captured by a hardware sniffer (e.g. USB-RS485 dongle in monitor mode).
 
+## Bridge / inter-system terms
+
+**Pylontech CAN protocol**: A CAN-bus protocol used by Pylontech US-series batteries to talk to inverters. Many third-party inverters (Victron, Deye, Goodwe, Sungrow, Sofar, Growatt, SolaX, ...) support "Pylontech compatibility" mode and accept battery data in this format. The de-facto open standard for residential battery <-> inverter comms.
+
+**BYD CAN protocol**: Similar role to Pylontech CAN but with different field layouts. Used by BYD's Premium HV / LV battery line. Several inverters offer BYD-mode as an alternative to Pylontech-mode.
+
+**SunSpec Modbus**: Open battery / inverter Modbus standard maintained by the SunSpec Alliance. Less widely deployed than Pylontech CAN but growing.
+
+**Emulator** (in this project): a device that pretends to be a GivEnergy LV BMS, taking inputs from a different battery's BMS and serving them in GivEnergy's expected format to a GivEnergy inverter. Solves "use a cheaper battery with a GivEnergy inverter".
+
+**Bridge** (in this project): a device that reads from a real GivEnergy battery and re-presents the data on a standard third-party-inverter protocol (typically Pylontech CAN). Solves "use a GivEnergy battery with a third-party inverter".
+
 ## Project-specific
 
-**FC=4 non-standard format**: GivEnergy's BMS uses a custom FC=4 response format that echoes the request's start address in place of the standard byte_count field. Critical for emulator implementations - see [01-protocol.md](01-protocol.md).
+**FC=4 non-standard format**: GivEnergy's BMS uses a custom FC=4 response format that echoes the request's start address in place of the standard byte_count field. Critical for both emulator and bridge implementations - see [01-protocol.md](01-protocol.md).
 
 **HR poll**: The high-rate (~245 ms) FC=3 query the inverter sends to the primary battery for real-time status.
 
