@@ -150,7 +150,7 @@ def _read_attr(plant, name: str):
             val = root.get(name)
             if val is not None:
                 return val
-        except Exception:
+        except (AttributeError, KeyError, TypeError):
             pass
         if hasattr(root, name):
             return getattr(root, name)
