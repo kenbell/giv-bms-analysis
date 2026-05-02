@@ -1,0 +1,70 @@
+# GivEnergy BMS Analysis
+
+Documentation and analysis of the GivEnergy Gen 2 LV battery BMS protocol, with the aim of enabling third-party inverter compatibility, BMS health monitoring, and emulator implementations that let cheaper battery packs work with GivEnergy inverters.
+
+## Background
+
+The original empirical analysis - hardware setup, RS485 captures, raw hex traces, and field-by-field interpretations - was started by @kenbell in [NOTES.md](NOTES.md). Now that GivEnergy support is no longer available, the goal is to make the protocol open enough that third-party batteries can be used with GivEnergy inverters and/or that GivEnergy batteries can be used with non-GivEnergy inverters.
+
+This documentation expands on Ken's empirical work with:
+
+- Static analysis of the official BMS firmware (multiple versions: 3017, 3020, 3022)
+- Static analysis of multiple inverter firmware variants (FA-series, A316/HY, A920/AIO, etc.)
+- Wire-capture parsing and timing analysis
+- Implementation guidance for emulators
+
+## Documentation index
+
+| File | Topic |
+|---|---|
+| [docs/00-glossary.md](docs/00-glossary.md) | Glossary of terms (Modbus, FCs, embedded, battery, etc.) - **start here if jargon trips you up** |
+| [docs/01-protocol.md](docs/01-protocol.md) | Modbus framing, baud rate, CRC, function-code support, FC=4 non-standard format |
+| [docs/02-holding-registers.md](docs/02-holding-registers.md) | HR(0..27) layout, field-by-field interpretation, polling cadence |
+| [docs/03-input-registers.md](docs/03-input-registers.md) | IR Block 1/2/3, layouts, cell voltages, slave rotation, "absent slave" pattern |
+| [docs/04-bms-firmware.md](docs/04-bms-firmware.md) | BMS firmware static analysis - MCU, register table, FC handlers, internal architecture |
+| [docs/05-inverter-firmware.md](docs/05-inverter-firmware.md) | Inverter firmware analysis - variants, validation rules, "BMS protocol is the constant" insight |
+| [docs/06-wire-captures.md](docs/06-wire-captures.md) | Cadence, latency, IR rotation pattern, capture methodology |
+| [docs/07-emulator-implications.md](docs/07-emulator-implications.md) | Design rules and pitfalls for an emulator implementation |
+
+## Tools
+
+| File | Purpose |
+|---|---|
+| [tools/serial_hexdump_logger.c](tools/serial_hexdump_logger.c) | Logs RS485 traffic with timestamps to a file (Ken's original utility) |
+| [tools/parse_log.py](tools/parse_log.py) | Parses serial_hexdump_logger output into Modbus frames with cadence/latency analysis |
+
+## System scope
+
+The analysis is based on a GivEnergy "classic" Low-Voltage system using Gen 2 9.5 kWh LiFePO4 batteries. The same batteries are compatible with:
+
+- AC 3.0 inverters
+- Gen 1 Hybrid inverters
+- Gen 2 Hybrid inverters
+- Gen 3 Hybrid inverters (FA-series)
+
+Because the same BMS works with all of these, **the wire protocol is invariant across inverter variants** - inverters' internal firmware differs but they all produce the same Modbus requests on the wire. See [docs/05-inverter-firmware.md](docs/05-inverter-firmware.md) for details.
+
+This analysis does **not** cover High-Voltage (HV) batteries or All-In-One (AIO) inverters; those use different battery families.
+
+## Status
+
+| Topic | State |
+|---|---|
+| Wire protocol fundamentals | Well-understood |
+| Function codes used | Confirmed: FC=3 read, FC=4 read, FC=6 write (rare) |
+| HR(0..27) field meanings | ~70% mapped (see [docs/02](docs/02-holding-registers.md)) |
+| IR field meanings | Most fields mapped (see [docs/03](docs/03-input-registers.md)) |
+| FC=4 framing format | **Non-standard** - resolved (see [docs/01](docs/01-protocol.md)) |
+| Inverter validation rules | Lenient on FA, stricter on older variants - mapped |
+| BMS alerts / mode flags | Partially understood; needs labelled captures |
+| BMS firmware versions covered | 3017, 3020, 3022 (LV); not yet HV or Gen 3 |
+
+## Contributing
+
+Contributions welcome. Common useful contributions:
+
+- More wire captures, especially under specific conditions (charge / discharge / fault / balancing)
+- Captures from different inverter variants
+- Additional firmware versions
+- Emulator implementations and test reports
+- Corrections to field interpretations
