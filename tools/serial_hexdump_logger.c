@@ -13,7 +13,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#define SERIAL_DEVICE "/dev/ttyUSB1"
 #define READ_BUFFER_SIZE 256
 #define BYTES_PER_LINE 16
 
@@ -114,6 +113,7 @@ static void log_hexdump(FILE *log_file, const unsigned char *buf, ssize_t len, u
 
 int main(int argc, char *argv[])
 {
+    const char *serial_device = "/dev/ttyUSB0";
     const char *log_path = "serial_hexdump.log";
     int serial_fd;
     FILE *log_file;
@@ -121,13 +121,16 @@ int main(int argc, char *argv[])
     unsigned char buffer[READ_BUFFER_SIZE];
     uint64_t total_bytes = 0;
 
-    if (argc > 2) {
-        fprintf(stderr, "Usage: %s [log_file]\n", argv[0]);
+    if (argc > 3) {
+        fprintf(stderr, "Usage: %s [serial_device] [log_file]\n", argv[0]);
         return 1;
     }
 
-    if (argc == 2) {
-        log_path = argv[1];
+    if (argc >= 2) {
+        serial_device = argv[1];
+    }
+    if (argc == 3) {
+        log_path = argv[2];
     }
 
     memset(&sa, 0, sizeof(sa));
@@ -136,7 +139,7 @@ int main(int argc, char *argv[])
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
 
-    serial_fd = open(SERIAL_DEVICE, O_RDONLY | O_NOCTTY);
+    serial_fd = open(serial_device, O_RDONLY | O_NOCTTY);
     if (serial_fd < 0) {
         perror("open serial device");
         return 1;
@@ -155,7 +158,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    fprintf(stderr, "Logging %s at 9600 baud to %s\n", SERIAL_DEVICE, log_path);
+    fprintf(stderr, "Logging %s at 9600 baud to %s\n", serial_device, log_path);
     fprintf(stderr, "Press Ctrl+C to stop.\n");
 
     while (!g_stop) {
