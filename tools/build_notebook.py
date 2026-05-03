@@ -162,7 +162,7 @@ def build():
         "## Findings summary\n\n"
         "Fill in below as conclusions emerge. Then export to "
         "`<capture>/findings.md` (un-redacted) and run `tools/redact.py` "
-        "to produce the public version that goes in the PR to `kenbell/giv-bms-analysis`.\n"
+        "to produce the public version that goes in the PR to `open-giv/bms-analysis`.\n"
     ))
     cells.append(_md(
         "**A. Reg 11:** _to be filled in_\n\n"
