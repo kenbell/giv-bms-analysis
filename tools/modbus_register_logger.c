@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -37,6 +38,12 @@ struct pending_request {
 struct pending_request_queue {
     struct pending_request entries[MAX_PENDING_REQUESTS];
     size_t count;
+};
+
+struct log_rate_limit {
+    unsigned int min_gap_seconds;
+    int has_last_log_time;
+    struct timespec last_log_time;
 };
 
 enum parse_status {
@@ -192,6 +199,35 @@ static int parse_register_number(const char *text, uint16_t *register_number)
     return 0;
 }
 
+static int parse_nonnegative_integer_seconds(const char *text, unsigned int *seconds)
+{
+    char *end = NULL;
+    unsigned long value;
+
+    errno = 0;
+    value = strtoul(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value > UINT_MAX) {
+        return -1;
+    }
+
+    *seconds = (unsigned int)value;
+    return 0;
+}
+
+static int elapsed_at_least_seconds(const struct timespec *start,
+                                    const struct timespec *end,
+                                    unsigned int seconds)
+{
+    time_t sec = end->tv_sec - start->tv_sec;
+    long nsec = end->tv_nsec - start->tv_nsec;
+
+    if (nsec < 0) {
+        sec -= 1;
+    }
+
+    return sec >= (time_t)seconds;
+}
+
 static void pending_request_queue_push(struct pending_request_queue *queue, const struct pending_request *request)
 {
     if (queue->count == MAX_PENDING_REQUESTS) {
@@ -220,9 +256,24 @@ static void pending_request_queue_remove(struct pending_request_queue *queue, si
 static void log_register_value(FILE *log_file,
                                const struct monitor_config *config,
                                uint8_t device_id,
-                               uint16_t value)
+                               uint16_t value,
+                               struct log_rate_limit *rate_limit)
 {
     char timestamp[48];
+    struct timespec now;
+
+    if (rate_limit->min_gap_seconds > 0U) {
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (rate_limit->has_last_log_time) {
+            if (!elapsed_at_least_seconds(&rate_limit->last_log_time,
+                                          &now,
+                                          rate_limit->min_gap_seconds)) {
+                return;
+            }
+        }
+        rate_limit->last_log_time = now;
+        rate_limit->has_last_log_time = 1;
+    }
 
     make_timestamp(timestamp, sizeof(timestamp));
 
@@ -253,7 +304,8 @@ static int process_matching_response(FILE *log_file,
                                      const struct monitor_config *config,
                                      const struct pending_request *request,
                                      const uint8_t *frame,
-                                     size_t frame_len)
+                                     size_t frame_len,
+                                     struct log_rate_limit *rate_limit)
 {
     uint8_t byte_count = frame[2];
     uint16_t register_offset;
@@ -303,7 +355,7 @@ static int process_matching_response(FILE *log_file,
     }
 
     value = (uint16_t)((uint16_t)frame[data_offset] << 8) | frame[data_offset + 1];
-    log_register_value(log_file, config, request->device_id, value);
+    log_register_value(log_file, config, request->device_id, value, rate_limit);
     return 1;
 }
 
@@ -312,6 +364,7 @@ static enum parse_status try_consume_frame(const uint8_t *buffer,
                                            struct pending_request_queue *pending_requests,
                                            FILE *log_file,
                                            const struct monitor_config *config,
+                                           struct log_rate_limit *rate_limit,
                                            size_t *consumed_len)
 {
     uint8_t device_id;
@@ -367,7 +420,7 @@ static enum parse_status try_consume_frame(const uint8_t *buffer,
                         function, device_id,
                         request->start_register, request->register_count);
             }
-            process_matching_response(log_file, config, request, buffer, response_len);
+            process_matching_response(log_file, config, request, buffer, response_len, rate_limit);
             pending_request_queue_remove(pending_requests, index);
             *consumed_len = response_len;
             return PARSE_CONSUMED;
@@ -458,7 +511,8 @@ static void process_stream_buffer(uint8_t *stream_buffer,
                                   size_t *buffered_len,
                                   struct pending_request_queue *pending_requests,
                                   FILE *log_file,
-                                  const struct monitor_config *config)
+                                  const struct monitor_config *config,
+                                  struct log_rate_limit *rate_limit)
 {
     size_t offset = 0;
 
@@ -471,6 +525,7 @@ static void process_stream_buffer(uint8_t *stream_buffer,
                                    pending_requests,
                                    log_file,
                                    config,
+                                   rate_limit,
                                    &consumed_len);
 
         if (status == PARSE_CONSUMED) {
@@ -497,6 +552,7 @@ int main(int argc, char *argv[])
     const char *log_path = "modbus_register.log";
     const char *serial_device = SERIAL_DEVICE;
     struct monitor_config config;
+    struct log_rate_limit rate_limit;
     int serial_fd;
     FILE *log_file;
     struct sigaction sa;
@@ -505,19 +561,30 @@ int main(int argc, char *argv[])
     size_t buffered_len = 0;
     struct pending_request_queue pending_requests;
 
-    while (argc >= 2 && argv[argc - 1][0] == '-') {
+    memset(&rate_limit, 0, sizeof(rate_limit));
+
+    while (argc >= 2) {
         if (strcmp(argv[argc - 1], "-v") == 0) {
             g_verbose = 1;
+            argc--;
         } else if (strcmp(argv[argc - 1], "-csv") == 0) {
             g_csv = 1;
+            argc--;
+        } else if (argc >= 3 && (strcmp(argv[argc - 2], "-g") == 0)) {
+            if (parse_nonnegative_integer_seconds(argv[argc - 1], &rate_limit.min_gap_seconds) != 0) {
+                fprintf(stderr, "Invalid minimum gap seconds '%s' (expected non-negative integer)\n", argv[argc - 1]);
+                return 1;
+            }
+            argc -= 2;
         } else {
             break;
         }
-        argc--;
     }
 
     if (argc < 3 || argc > 5) {
-        fprintf(stderr, "Usage: %s [serial_device] <holding|input> <register> [log_file] [-v] [-csv]\n", argv[0]);
+        fprintf(stderr,
+                "Usage: %s [serial_device] <holding|input> <register> [log_file] [-v] [-csv] [-g <seconds>]\n",
+                argv[0]);
         return 1;
     }
 
@@ -528,7 +595,9 @@ int main(int argc, char *argv[])
     }
 
     if (argc < 3) {
-        fprintf(stderr, "Usage: %s [serial_device] <holding|input> <register> [log_file] [-v] [-csv]\n", argv[0]);
+        fprintf(stderr,
+                "Usage: %s [serial_device] <holding|input> <register> [log_file] [-v] [-csv] [-g <seconds>]\n",
+                argv[0]);
         return 1;
     }
 
@@ -587,6 +656,9 @@ int main(int argc, char *argv[])
             (unsigned int)config.register_number,
             serial_device,
             log_path);
+    if (rate_limit.min_gap_seconds > 0U) {
+        fprintf(stderr, "Minimum log gap: %u seconds\n", rate_limit.min_gap_seconds);
+    }
     fprintf(stderr, "Press Ctrl+C to stop.\n");
 
     while (!g_stop) {
@@ -609,7 +681,12 @@ int main(int argc, char *argv[])
             memcpy(stream_buffer + buffered_len, buffer, chunk_len);
             buffered_len += chunk_len;
 
-            process_stream_buffer(stream_buffer, &buffered_len, &pending_requests, log_file, &config);
+            process_stream_buffer(stream_buffer,
+                                  &buffered_len,
+                                  &pending_requests,
+                                  log_file,
+                                  &config,
+                                  &rate_limit);
             continue;
         }
 
