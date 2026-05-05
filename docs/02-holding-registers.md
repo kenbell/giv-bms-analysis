@@ -41,8 +41,8 @@ The 28 registers (= 56 bytes) decoded at the byte level:
 | 16  | 32-33 | constant `0x0000` in capture | Single byte loaded from RAM. **Mode/state byte.** |
 | 17  | 34-35 | varies (`0x114A`-`0x1219`, ~142 distinct values) | **Hash low-half of 6 dynamic bytes from SRAM `0x20000105..0x2000010A`**, refreshed each cycle (~1/sec) by `0x08001362` then hashed at `0x0800_D584`. The bytes encode some live state (changes ~1/sec). |
 | 18  | 36-37 | constant `0x389D` (14493) across all 829 captures | Hash high-half of the same 6-byte source. Constant per-device for this device, but technically derived from the same dynamic bytes - the high-half computation just happens to be invariant for this device's state range. |
-| 19  | 38-39 | toggles `0x00CE` / `0x00CF` | OR-mask of 8 specific bits: bit0/1 from sign of `*(int*)0x2000014C` (charge/discharge direction, set to 1 for discharge); bit2 from `[0x20000140]`; bit3 from `[0x200000CE]`; bit4 from `[0x2000009D]`; bit5 conditional; bit6/7 from `[0x2000027B]` bits 5/6. **Composite status / fault byte.** |
-| 20  | 40-41 | constant `0x0000` in capture | Per-pack online flags (8-bit OR composite from `[0x20000279]` and per-pack walk). |
+| 19  | 38-39 | See [Register 19 Bits](#register-19-bits) | OR-mask of 8 specific bits: bit0/1 from sign of `*(int*)0x2000014C`; bit2 from `[0x20000140]`; bit3 from `[0x200000CE]`; bit4 from `[0x2000009D]`; bit5 conditional; bit6/7 from `[0x2000027B]` bits 5/6. **Composite status byte.** |
+| 20  | 40-41 | See [Register 20 Bits](#register-20-bits) | a set of per-pack online flags (8-bit OR composite from `[0x20000279]` and per-pack walk) |
 | 21  | 42-43 | 3 distinct values `0x005D`-`0x005F` | `*(u16)0x20000184`. Possibly main pack SoC % (93-95%) - decreased over capture, plausible. |
 | 22  | 44-45 | Battery Voltage in units of 0.01V, measured at primary battery pack. |
 | 23  | 46-47 | 85 distinct values across signed range | **Signed pack current in deciAmps (0.1 A units)**, NOT centi-amps. From `*(float*)0x2000014C * 10.0f` via float-to-signed-int. Positive values indicate charging, negative discharging. |
@@ -50,6 +50,50 @@ The 28 registers (= 56 bytes) decoded at the byte level:
 | 25  | 50-51 | constant `0x2328` (9000) in capture | **DYNAMIC**: `*(u16)0x20001598 * 100`. The observed `0x2328` reflects source halfword = 90 (i.e. 90.00 A continuous limit at the time). Configurable. |
 | 26  | 52-53 | 10 distinct values, varies with 27 | `*(u16)0x20000142`. **Independent source** - they only happen to track each other in steady state. |
 | 27  | 54-55 | 10 distinct values, varies with 26 | `*(u16)0x20000144`. Independent source. |
+
+### Register 19 Bits
+
+| Bit | Meaning (if set) | Analysis |
+|-----|------------------|----------|
+| 1 (lsb) | Discharging | From protocol analysis and from sign of `*(int*)0x2000014C` |
+| 2 |||
+| 3 |||
+| 4 |||
+| 5 |||
+| 6 |||
+| 7 |||
+| 8 |||
+| 9 || Unused |
+| 10 || Unused |
+| 11 || Unused |
+| 12 || Unused |
+| 13 || Unused |
+| 14 || Unused |
+| 15 || Unused |
+| 16 (msb) || Unused |
+
+### Register 20 Bits
+
+Register 20 is most likely a set of alarm bits collated from all packs using OR.
+
+| Bit | Meaning (if set) | Analysis |
+|-----|------------------|----------|
+| 1 (lsb) | |  |
+| 2 |||
+| 3 | Over-voltage | From protocol analysis during calibration cycle, seen briefly at end of calibration (max SOC)|
+| 4 | Under-voltage | From protocol analysis during calibration cycle, seen at minimum SOC|
+| 5 |||
+| 6 |||
+| 7 |||
+| 8 |||
+| 9 || Unused |
+| 10 || Unused |
+| 11 || Unused |
+| 12 || Unused |
+| 13 || Unused |
+| 14 || Unused |
+| 15 || Unused |
+| 16 (msb) || Unused |
 
 ## Field-variation analysis
 
